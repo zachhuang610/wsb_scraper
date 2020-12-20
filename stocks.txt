@@ -1,0 +1,8 @@
+BUY
+TSLA
+PLTR
+EV
+AMD
+NIO
+
+SELL
