@@ -1,0 +1,8 @@
+BUY:
+ETH
+TSLA
+E
+O
+IMO
+
+SELL:

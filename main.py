@@ -6,7 +6,7 @@ import config
 
 def get_stock_list():
     ticker_dict = {}
-    filelist = ["list1.csv", "list2.csv", "list3.csv"]
+    filelist = ["input/list1.csv", "input/list2.csv", "input/list3.csv"]
     for file in filelist:
         tl = pd.read_csv(file, skiprows=0, skip_blank_lines=True)
         tl = tl[tl.columns[0]].tolist()
@@ -16,19 +16,19 @@ def get_stock_list():
 
 
 def get_prev_tickers():
-    prev = open("prev.txt", "w+")
+    prev = open("output/prev.txt", "r")
     prev_tickers = prev.readlines()
     prev_tickers = [x.strip() for x in prev_tickers]
-    return prev, prev_tickers
+    prev.close()
+    return prev_tickers
 
 
-def get_tickers(sub, stock_list):
+def get_tickers(sub, stock_list, prev_tickers):
     reddit = praw.Reddit(
         client_id=config.api_id,
         client_secret=config.api_secret,
         user_agent="WSB Scraping",
     )
-    prev, prev_tickers = get_prev_tickers()
     weekly_tickers = {}
 
     regex_pattern = r'\b([A-Z]+)\b'
@@ -42,8 +42,8 @@ def get_tickers(sub, stock_list):
         for s in strings:
             for phrase in re.findall(regex_pattern, s):
                 if phrase not in blacklist:
-                    if ticker_dict.get(phrase) == 1:
-                        if weekly_tickers.get(phrase) is None:
+                    if phrase in ticker_dict:
+                        if phrase not in weekly_tickers:
                             weekly_tickers[phrase] = 1
                         else:
                             weekly_tickers[phrase] += 1
@@ -59,9 +59,8 @@ def get_tickers(sub, stock_list):
         if old not in top_tickers:
             to_sell.append(old)
 
-    prev.writelines(top_tickers)
-    prev.close()
-    write_to_file(sub+'.txt', to_buy, to_sell)
+    write_to_file('output/' + sub+'.txt', to_buy, to_sell)
+    return to_buy
 
 
 def write_to_file(file, to_buy, to_sell):
@@ -74,10 +73,18 @@ def write_to_file(file, to_buy, to_sell):
 
 
 def main():
+    prev_tickers = get_prev_tickers()
     subs = ["wallstreetbets", "stocks", "investing", "smallstreetbets"]
     stock_list = get_stock_list()
+    positions = []
     for sub in subs:
-        get_tickers(sub, stock_list)
+        to_buy = get_tickers(sub, stock_list, prev_tickers)
+        for stock in to_buy:
+            if stock not in positions:
+                positions.append(stock)
+    prev = open("output/prev.txt", "w")
+    prev.writelines(positions)
+    prev.close()
 
 
 if __name__ == '__main__':
