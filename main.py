@@ -22,7 +22,7 @@ def get_prev_tickers():
     return prev, prev_tickers
 
 
-def get_tickers():
+def get_tickers(sub, stock_list):
     reddit = praw.Reddit(
         client_id=config.api_id,
         client_secret=config.api_secret,
@@ -32,9 +32,9 @@ def get_tickers():
     weekly_tickers = {}
 
     regex_pattern = r'\b([A-Z]+)\b'
-    ticker_dict = get_stock_list()
-    blacklist = ["A", "I", "DD", "WSB", "YOLO", "RH"]
-    for submission in reddit.subreddit("wallstreetbets").top("week"):
+    ticker_dict = stock_list
+    blacklist = ["A", "I", "DD", "WSB", "YOLO", "RH", "EV"]
+    for submission in reddit.subreddit(sub).top("week"):
         strings = [submission.title]
         submission.comments.replace_more(limit=0)
         for comment in submission.comments.list():
@@ -61,17 +61,23 @@ def get_tickers():
 
     prev.writelines(top_tickers)
     prev.close()
-    return to_buy, to_sell
+    write_to_file(sub+'.txt', to_buy, to_sell)
+
+
+def write_to_file(file, to_buy, to_sell):
+    f = open(file, "w")
+    f.write("BUY:\n")
+    f.writelines(to_buy)
+    f.write("\nSELL:\n")
+    f.writelines(to_sell)
+    f.close()
 
 
 def main():
-    to_buy, to_sell = get_tickers()
-    buy = open("toBuy.txt", "w")
-    sell = open("toSell.txt", "w")
-    buy.writelines(to_buy)
-    sell.writelines(to_sell)
-    buy.close()
-    sell.close()
+    subs = ["wallstreetbets", "stocks", "investing", "smallstreetbets"]
+    stock_list = get_stock_list()
+    for sub in subs:
+        get_tickers(sub, stock_list)
 
 
 if __name__ == '__main__':
