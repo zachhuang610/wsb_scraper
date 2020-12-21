@@ -1,8 +1,8 @@
 BUY:
-ETH
 TSLA
+ETH
 E
-O
-IMO
+FSD
+PLTR
 
 SELL:

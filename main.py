@@ -2,6 +2,8 @@ import praw
 import re
 import pandas as pd
 import config
+import discord
+import time
 
 
 def get_stock_list():
@@ -18,22 +20,21 @@ def get_stock_list():
 def get_prev_tickers():
     prev = open("output/prev.txt", "r")
     prev_tickers = prev.readlines()
-    prev_tickers = [x.strip() for x in prev_tickers]
     prev.close()
     return prev_tickers
 
 
 def get_tickers(sub, stock_list, prev_tickers):
     reddit = praw.Reddit(
-        client_id=config.api_id,
-        client_secret=config.api_secret,
+        client_id=config.reddit_id,
+        client_secret=config.reddit_secret,
         user_agent="WSB Scraping",
     )
     weekly_tickers = {}
 
     regex_pattern = r'\b([A-Z]+)\b'
     ticker_dict = stock_list
-    blacklist = ["A", "I", "DD", "WSB", "YOLO", "RH", "EV"]
+    blacklist = ["A", "I", "DD", "WSB", "YOLO", "RH", "EV", "PE"]
     for submission in reddit.subreddit(sub).top("week"):
         strings = [submission.title]
         submission.comments.replace_more(limit=0)
@@ -59,7 +60,7 @@ def get_tickers(sub, stock_list, prev_tickers):
         if old not in top_tickers:
             to_sell.append(old)
 
-    write_to_file('output/' + sub+'.txt', to_buy, to_sell)
+    write_to_file('output/'+sub+'.txt', to_buy, to_sell)
     return to_buy
 
 
@@ -68,8 +69,32 @@ def write_to_file(file, to_buy, to_sell):
     f.write("BUY:\n")
     f.writelines(to_buy)
     f.write("\nSELL:\n")
+    to_sell = [ticker+'\n' for ticker in to_sell]
     f.writelines(to_sell)
     f.close()
+
+
+def stf(subs):
+    files = []
+    for sub in subs:
+        fn = sub
+        fp = 'output/'+sub+'.txt'
+        file = discord.File(fp=fp, filename=fn, spoiler=False)
+        files.append(file)
+    return files
+
+
+def discordbot(files):
+    client = discord.Client()
+
+    @client.event
+    async def on_ready():
+        channel = client.get_channel(config.channel_id)
+        await channel.send(files=files)
+        await client.close()
+        time.sleep(1)
+
+    client.run(config.discord_token)
 
 
 def main():
@@ -85,6 +110,9 @@ def main():
     prev = open("output/prev.txt", "w")
     prev.writelines(positions)
     prev.close()
+    files = stf(subs)
+    discordbot(files)
+    print("success")
 
 
 if __name__ == '__main__':

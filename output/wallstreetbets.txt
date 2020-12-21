@@ -3,6 +3,6 @@ PLTR
 TSLA
 GME
 MT
-SPCE
+F
 
 SELL:

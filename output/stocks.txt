@@ -3,6 +3,6 @@ TSLA
 PLTR
 AMD
 NIO
-ABNB
+SQ
 
 SELL:
