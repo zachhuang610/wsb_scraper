@@ -4,6 +4,7 @@ import pandas as pd
 import config
 import discord
 import time
+import robin_stocks
 
 
 def get_stock_list():
@@ -19,21 +20,21 @@ def get_stock_list():
 
 def get_prev_tickers():
     prev = open("output/prev.txt", "r")
-    prev_tickers = prev.readlines()
+    prevTickers = prev.readlines()
     prev.close()
-    return prev_tickers
+    return prevTickers
 
 
-def get_tickers(sub, stock_list, prev_tickers):
+def get_tickers(sub, stockList, prevTickers):
     reddit = praw.Reddit(
         client_id=config.reddit_id,
         client_secret=config.reddit_secret,
         user_agent="WSB Scraping",
     )
-    weekly_tickers = {}
+    weeklyTickers = {}
 
-    regex_pattern = r'\b([A-Z]+)\b'
-    ticker_dict = stock_list
+    regexPattern = r'\b([A-Z]+)\b'
+    tickerDict = stockList
     blacklist = ["A", "I", "DD", "WSB", "YOLO", "RH", "EV", "PE"]
     for submission in reddit.subreddit(sub).top("week"):
         strings = [submission.title]
@@ -41,35 +42,35 @@ def get_tickers(sub, stock_list, prev_tickers):
         for comment in submission.comments.list():
             strings.append(comment.body)
         for s in strings:
-            for phrase in re.findall(regex_pattern, s):
+            for phrase in re.findall(regexPattern, s):
                 if phrase not in blacklist:
-                    if phrase in ticker_dict:
-                        if phrase not in weekly_tickers:
-                            weekly_tickers[phrase] = 1
+                    if phrase in tickerDict:
+                        if phrase not in weeklyTickers:
+                            weeklyTickers[phrase] = 1
                         else:
-                            weekly_tickers[phrase] += 1
-    top_tickers = sorted(weekly_tickers, key=weekly_tickers.get, reverse=True)[:5]
-    top_tickers = [ticker + '\n' for ticker in top_tickers]
+                            weeklyTickers[phrase] += 1
+    topTickers = sorted(weeklyTickers, key=weeklyTickers.get, reverse=True)[:5]
+    topTickers = [ticker + '\n' for ticker in topTickers]
 
-    to_buy = []
-    to_sell = []
-    for new in top_tickers:
-        if new not in prev_tickers:
-            to_buy.append(new)
-    for old in prev_tickers:
-        if old not in top_tickers:
-            to_sell.append(old)
+    toBuy = []
+    toSell = []
+    for new in topTickers:
+        if new not in prevTickers:
+            toBuy.append(new)
+    for old in prevTickers:
+        if old not in topTickers:
+            toSell.append(old)
 
-    write_to_file('output/'+sub+'.txt', to_buy, to_sell)
-    return to_buy
+    write_to_file('output/'+sub+'.txt', toBuy, toSell)
+    return toBuy, toSell
 
 
-def write_to_file(file, to_buy, to_sell):
+def write_to_file(file, toBuy, toSell):
     f = open(file, "w")
     f.write("BUY:\n")
-    f.writelines(to_buy)
+    f.writelines(toBuy)
     f.write("\nSELL:\n")
-    to_sell = [ticker+'\n' for ticker in to_sell]
+    to_sell = [ticker+'\n' for ticker in toSell]
     f.writelines(to_sell)
     f.close()
 
@@ -77,9 +78,8 @@ def write_to_file(file, to_buy, to_sell):
 def stf(subs):
     files = []
     for sub in subs:
-        fn = sub
         fp = 'output/'+sub+'.txt'
-        file = discord.File(fp=fp, filename=fn, spoiler=False)
+        file = discord.File(fp=fp, filename=fp, spoiler=False)
         files.append(file)
     return files
 
@@ -97,22 +97,46 @@ def discordbot(files):
     client.run(config.discord_token)
 
 
+def robinbot(buy, sell):
+    login = robin_stocks.login(config.robin_user, config.robin_pwd)
+
+    holdings = robin_stocks.build_holdings()
+    for stock in sell:
+        if stock in holdings:
+            quantity = holdings[stock]["quantity"]
+            robin_stocks.order_sell_fractional_by_quantity(stock, quantity, 'gtc')
+
+    bp = robin_stocks.load_account_profile(info="buying_power")
+    if bp > 100.0:
+        bpps = bp/len(buy)
+        for stock in buy:
+            robin_stocks.order_buy_fractional_by_price(stock, bpps, 'gtc')
+    else:
+        print("not enough buying power")
+    robin_stocks.logout()
+
+
 def main():
-    prev_tickers = get_prev_tickers()
+    prevTickers = get_prev_tickers()
     subs = ["wallstreetbets", "stocks", "investing", "smallstreetbets"]
-    stock_list = get_stock_list()
-    positions = []
+    stockList = get_stock_list()
+    buyPos = []
+    sellPos = []
     for sub in subs:
-        to_buy = get_tickers(sub, stock_list, prev_tickers)
-        for stock in to_buy:
-            if stock not in positions:
-                positions.append(stock)
+        toBuy, toSell = get_tickers(sub, stockList, prevTickers)
+        for stock in toBuy:
+            if stock not in buyPos:
+                buyPos.append(stock)
+        for stock in toSell:
+            if stock not in sellPos:
+                sellPos.append(stock)
+
+    robinbot(buyPos, sellPos)
     prev = open("output/prev.txt", "w")
-    prev.writelines(positions)
+    prev.writelines(buyPos)
     prev.close()
     files = stf(subs)
     discordbot(files)
-    print("success")
 
 
 if __name__ == '__main__':
