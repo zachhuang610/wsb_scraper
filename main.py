@@ -5,6 +5,8 @@ import config
 import discord
 import time
 import robin_stocks
+from rich.traceback import install
+install()
 
 
 def get_stock_list():
@@ -35,7 +37,7 @@ def get_tickers(sub, stockList, prevTickers):
 
     regexPattern = r'\b([A-Z]+)\b'
     tickerDict = stockList
-    blacklist = ["A", "I", "DD", "WSB", "YOLO", "RH", "EV", "PE"]
+    blacklist = ["A", "I", "DD", "WSB", "YOLO", "RH", "EV", "PE", "ETH", "BTC", "E"]
     for submission in reddit.subreddit(sub).top("week"):
         strings = [submission.title]
         submission.comments.replace_more(limit=0)
@@ -107,7 +109,7 @@ def robinbot(buy, sell):
             robin_stocks.order_sell_fractional_by_quantity(stock, quantity, 'gtc')
 
     bp = robin_stocks.load_account_profile(info="buying_power")
-    if bp > 100.0:
+    if bp > 0:
         bpps = bp/len(buy)
         for stock in buy:
             robin_stocks.order_buy_fractional_by_price(stock, bpps, 'gtc')
