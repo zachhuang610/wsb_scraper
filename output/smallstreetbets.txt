@@ -1,8 +1,0 @@
-BUY:
-PLTR
-ICLN
-SNDL
-HLT
-NIO
-
-SELL:

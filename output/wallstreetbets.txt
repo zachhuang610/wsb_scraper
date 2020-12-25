@@ -1,8 +1,0 @@
-BUY:
-PLTR
-TSLA
-GME
-MT
-F
-
-SELL:

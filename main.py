@@ -6,6 +6,7 @@ import discord
 import time
 import robin_stocks
 from rich.traceback import install
+import pyotp
 install()
 
 
@@ -27,7 +28,7 @@ def get_prev_tickers():
     return prevTickers
 
 
-def get_tickers(sub, stockList, prevTickers):
+def get_tickers(sub, stockList):
     reddit = praw.Reddit(
         client_id=config.reddit_id,
         client_secret=config.reddit_secret,
@@ -51,29 +52,17 @@ def get_tickers(sub, stockList, prevTickers):
                             weeklyTickers[phrase] = 1
                         else:
                             weeklyTickers[phrase] += 1
-    topTickers = sorted(weeklyTickers, key=weeklyTickers.get, reverse=True)[:5]
-    topTickers = [ticker + '\n' for ticker in topTickers]
-
-    toBuy = []
-    toSell = []
-    for new in topTickers:
-        if new not in prevTickers:
-            toBuy.append(new)
-    for old in prevTickers:
-        if old not in topTickers:
-            toSell.append(old)
-
-    write_to_file('output/'+sub+'.txt', toBuy, toSell)
-    return toBuy, toSell
+    return weeklyTickers
 
 
 def write_to_file(file, toBuy, toSell):
     f = open(file, "w")
     f.write("BUY:\n")
+    toBuy = [buy + '\n' for buy in toBuy]
     f.writelines(toBuy)
     f.write("\nSELL:\n")
-    to_sell = [ticker+'\n' for ticker in toSell]
-    f.writelines(to_sell)
+    toSell = [sell + '\n' for sell in toSell]
+    f.writelines(toSell)
     f.close()
 
 
@@ -100,19 +89,30 @@ def discordbot(files):
 
 
 def robinbot(buy, sell):
-    login = robin_stocks.login(config.robin_user, config.robin_pwd)
+    totp = pyotp.TOTP(config.robin_totp).now()
+    print("Current OTP: ", totp)
+    login = robin_stocks.login(config.robin_user, config.robin_pwd, mfa_code=totp)
 
-    holdings = robin_stocks.build_holdings()
+    holdings = robin_stocks.get_open_stock_positions()
+    print(buy)
+    print(sell)
     for stock in sell:
+        stock = stock.strip()
         if stock in holdings:
             quantity = holdings[stock]["quantity"]
-            robin_stocks.order_sell_fractional_by_quantity(stock, quantity, 'gtc')
+            robin_stocks.order_sell_fractional_by_quantity(stock, quantity, 'gfd')
 
-    bp = robin_stocks.load_account_profile(info="buying_power")
+    acc = robin_stocks.load_account_profile()
+    print(acc)
+    bp = acc["cash"]
+    print(bp)
+    bp = float(bp)
     if bp > 0:
         bpps = bp/len(buy)
+        print(bpps)
         for stock in buy:
-            robin_stocks.order_buy_fractional_by_price(stock, bpps, 'gtc')
+            order = robin_stocks.order_buy_fractional_by_price(stock, bpps, 'gfd')
+            print(order)
     else:
         print("not enough buying power")
     robin_stocks.logout()
@@ -122,23 +122,33 @@ def main():
     prevTickers = get_prev_tickers()
     subs = ["wallstreetbets", "stocks", "investing", "smallstreetbets"]
     stockList = get_stock_list()
-    buyPos = []
-    sellPos = []
+    topTickers = {}
     for sub in subs:
-        toBuy, toSell = get_tickers(sub, stockList, prevTickers)
-        for stock in toBuy:
-            if stock not in buyPos:
-                buyPos.append(stock)
-        for stock in toSell:
-            if stock not in sellPos:
-                sellPos.append(stock)
+        weeklyTickers = get_tickers(sub, stockList)
+        for ticker in weeklyTickers.keys():
+            if ticker in topTickers:
+                topTickers[ticker] += weeklyTickers[ticker]
+            else:
+                topTickers[ticker] = weeklyTickers[ticker]
 
-    robinbot(buyPos, sellPos)
+    top5 = sorted(topTickers, key=topTickers.get, reverse=True)[:5]
+    toBuy = []
+    toSell = []
+    for top in top5:
+        if top not in prevTickers:
+            toBuy.append(top)
+    for prev in prevTickers:
+        prev = prev.strip()
+        if prev not in top5:
+            toSell.append(prev)
+
+    write_to_file("output/actions.txt", toBuy, toSell)
+    robinbot(toBuy, toSell)
     prev = open("output/prev.txt", "w")
-    prev.writelines(buyPos)
+    toBuy = [buy+'\n' for buy in toBuy]
+    prev.writelines(toBuy)
     prev.close()
-    files = stf(subs)
-    discordbot(files)
+    discordbot(stf(["actions"]))
 
 
 if __name__ == '__main__':
