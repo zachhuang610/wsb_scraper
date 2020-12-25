@@ -1,8 +1,8 @@
 BUY:
+GME
 TSLA
 PLTR
-AMD
+BABA
 NIO
-SQ
 
 SELL:
