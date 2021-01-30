@@ -104,7 +104,7 @@ def robinbot(buy, sell):
 
     acc = robin_stocks.load_account_profile()
     print(acc)
-    bp = acc["cash"]
+    bp = acc["portfolio_cash"]
     print(bp)
     bp = float(bp)
     if bp > 0:
