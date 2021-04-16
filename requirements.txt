@@ -1,0 +1,5 @@
+praw
+pandas
+discord
+robin_stocks
+rich
